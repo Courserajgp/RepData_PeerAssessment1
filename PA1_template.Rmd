@@ -1,25 +1,145 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+# Reproducible Research: Peer Assessment 1
 
+### Introduction
 
-## Loading and preprocessing the data
+It is now possible to collect a large amount of data about personal
+movement using activity monitoring devices such as a
+[Fitbit](http://www.fitbit.com), [Nike
+Fuelband](http://www.nike.com/us/en_us/c/nikeplus-fuelband), or
+[Jawbone Up](https://jawbone.com/up). These type of devices are part of
+the "quantified self" movement -- a group of enthusiasts who take
+measurements about themselves regularly to improve their health, to
+find patterns in their behavior, or because they are tech geeks. But
+these data remain under-utilized both because the raw data are hard to
+obtain and there is a lack of statistical methods and software for
+processing and interpreting the data.
 
+This assignment makes use of data from a personal activity monitoring
+device. This device collects data at 5 minute intervals through out the
+day. The data consists of two months of data from an anonymous
+individual collected during the months of October and November, 2012
+and include the number of steps taken in 5 minute intervals each day.
 
+For data source and structure, please read the readme.md file.
 
-## What is mean total number of steps taken per day?
+### Loading and preprocessing the data
 
+The downloaded zip file has been unzipped and saved to the same directory as the
+R markdown document, with a name "activity.csv".  
+Data content of the file is read into a data frame called "rawdata". The dataframe "completedata" is derived from rawdata after removing rows with NA or NaN values. 
+```{r}
+rawdata <- read.csv('~/Coursera R/Reproducible research/Project 1/repdata-data-activity/activity.csv')
+completedata <- rawdata[complete.cases(rawdata),]
+```
+Any further necessary data processing or transformation steps are shown at the particular analyses below. 
 
+### What is mean total number of steps taken per day?
 
-## What is the average daily activity pattern?
+For this part of the assignment, missing values in the dataset are ignored (the "completedata" dataframe is used). The number of steps by days is calculated by the following R script:
+```{r}
+stepsbyday <- aggregate(completedata$steps, list(completedata$date), sum)
+colnames(stepsbyday) <- c('date', 'daily.steps')
+```
+The resulting "stepsbyday" object is a data frame with the following structure and summary:
+```{r}
+str(stepsbyday)
+summary(stepsbyday)
+```
+**Mean** and **median** numbers of daily steps can be read from the above summary.  
+A histogram of daily steps is provided below:
+```{r}
+hist(stepsbyday$daily.steps, breaks = 20, main = 'Histogram of daily steps (missing values excluded)', xlab = 'Daily steps', col='lightgreen')
+```
 
+### What is the average daily activity pattern?
 
+The number of steps by the 5-minute measurement intervals is averaged across days, skipping the missing values, by the following R script:
+```{r}
+stepsbyintervals <- aggregate(completedata$steps, list(completedata$interval), mean)
+colnames(stepsbyintervals) <- c('interval', 'steps.in.interval')
+```
+The resulting "stepsbyintervals" object is a data frame with the following structure:
+```{r}
+str(stepsbyintervals)
+```
+Average daily activity pattern is shown by the following time series plot:
+```{r}
+plot(stepsbyintervals$interval, stepsbyintervals$steps.in.interval, type = 'l', main = 'Activity pattern', xlab = 'Interval ID', ylab = 'Mean number of steps per interval')
+```
 
-## Imputing missing values
+The maximum number of steps was asociated with the following interval ID:
+```{r}
+stepsbyintervals[order(stepsbyintervals$steps.in.interval, decreasing='TRUE'), ][1,1]
+```
+Note that interval IDs have 3 or 4 digits, with the last two digits representing minutes, and the preceding 1 or 2 digits representing hours. Interval IDs refer to the beginning of the 5-minute intervals. As illustrations, see the following examples:  
+- interval ID '835' represents the interval 08:35:00 - 08:39:59 in the morning;  
+- interval ID '2255' represents the interval 22:55:00 - 22:59:59 in the evening. 
 
+### Imputing missing values
+The total number of missing values in the dataset (i.e. the total number of rows with NAs) is calculated by the following script:
+```{r}
+length(rawdata[,1])-length(completedata[,1])
+```
+For filling in the missing values in the raw dataset, all NA values are replaced by mean number of steps in the corresponding 5-minute intervals. A new dataset with filled missing data (called "filled") is created by the following R script:
+```{r}
+filled <- rawdata
+missing <- is.na(rawdata[,1])
+for(i in 1:17568){
+     if (missing[i] == "TRUE"){filled[i,1] <- stepsbyintervals[((i-1)%%288)+1,2]}
+}
+```
+The number of steps by days (based on the filled data) is calculated by the following R script:
+```{r}
+stepsbyday.filled <- aggregate(filled$steps, list(filled$date), sum)
+colnames(stepsbyday.filled) <- c('date', 'daily.steps')
+```
+The resulting "stepsbyday.filled" object is a data frame with the following structure and summary:
+```{r}
+str(stepsbyday.filled)
+summary(stepsbyday.filled)
+```
+**Mean** and **median** numbers of daily steps with filled data can be read from the above summary. A histogram of daily steps with filled data is provided below:
 
+```{r}
+hist(stepsbyday.filled$daily.steps, breaks = 20, main = 'Histogram of daily steps (NAs filled with interval means)', xlab = 'Daily steps', col='lightblue')
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+It is concluded that missing data filling with interval means did not have noticeable effect on mean and median values, although the distribution of daily activity became slightly more homogenous or narrow. 
+
+### Are there differences in activity patterns between weekdays and weekends?
+
+Weekdays of calendar days are classified as "weekend" or "weekday" by the following script, adding a new factor column called "wd" to the NA inputed ("filled") dataset:
+```{r}
+Sys.setlocale(category = "LC_TIME", locale = "C") # set locale to "C" for English weekday labels
+wd <- as.character(weekdays(as.Date(filled[,2])))
+for (j in 1:17568){
+     if (wd[j] %in% c('Saturday', 'Sunday')){wd[j] <- c('weekend')}
+     else {wd[j] <- c('weekday')}
+     }
+filledwd <- cbind(filled, as.factor(wd))
+colnames (filledwd) <- c(colnames(filled), c('wd'))
+Sys.setlocale(category = "LC_TIME", locale = "") # restore local time settings
+summary(filledwd)
+```
+Activity patterns on weekdays and on weekends are calculated and saved to the "profiles" dataframe as shown below:
+
+````{r}
+SaSu <- filledwd[filledwd$wd == 'weekend',]
+MTWTF <- filledwd[filledwd$wd == 'weekday',]
+SaSuprofile <- data.frame(interval = SaSu$interval, meansteps = aggregate(SaSu$steps, list(SaSu$interval), mean)[,2], wd = 'weekend')
+MTWTFprofile <- data.frame(interval = MTWTF$interval, meansteps = aggregate(MTWTF$steps, list(MTWTF$interval), mean)[,2], wd = 'weekday')
+profiles <- rbind(SaSuprofile, MTWTFprofile)
+profiles$wd <- as.factor(profiles$wd)
+```
+
+A 2-panel plot is presented below on the activity patterns on weekdays and weekends:
+```{r}
+library(lattice)
+plot <- xyplot(meansteps ~ interval | wd, data = profiles, type = 'l', layout = c(1,2), xlab = 'Intervals', ylab='mean steps per interval', main = 'Activity pattern on weekdays and on weekends')
+print(plot)
+```
+  
+  
+It seems that the investigated subjects tended to get up later on weekends.   
+  
+This is the end of the report. 
